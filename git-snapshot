@@ -1,0 +1,111 @@
+#!/bin/sh
+
+function print_help {
+    echo '''Usage: git snapshot [--verbose | -v] [-m | --message <message>]
+             [-i | --index] [-t | tag <tag_name>] [--force-tag]
+'''
+}
+
+NUMBER_OF_EXPECTED_PARAMS=0
+PARAMS=()
+PARAMS_CALLBACK=
+
+function expect_params {
+    if [[ $# != 2 ]] ; then
+        echo "expected two arguments, got ${@}"
+        exit 2
+    fi
+    NUMBER_OF_EXPECTED_PARAMS=$1
+    PARAMS=()
+    PARAMS_CALLBACK=$2
+}
+
+function add_param {
+    PARAMS+=($1)
+    NUMBER_OF_EXPECTED_PARAMS=$((NUMBER_OF_EXPECTED_PARAMS - 1))
+    if [[ $NUMBER_OF_EXPECTED_PARAMS == 0 ]] ; then
+        ${PARAMS_CALLBACK} ${PARAMS[@]}
+        PARAMS=()
+    fi
+}
+
+function on_tag {
+    TAG=$1
+}
+
+function on_message {
+    MESSAGE=$1
+}
+
+function on_option {
+    local OPTION=$1
+    if [[ $NUMBER_OF_EXPECTED_PARAMS > 0 ]] ; then
+        add_param $1
+        return
+    fi
+    case "${OPTION}" in
+        -v | --verbose )
+            VERBOSE=true
+            ;;
+        -h | --help )
+            print_help
+            exit
+            ;;
+        -t | --tag )
+            expect_params 1 on_tag
+            ;;
+        --force-tag )
+            FORCE_TAG=true
+            ;;
+        -m | --message )
+            expect_params 1 on_message
+            ;;
+        -i | --index )
+            INDEX=true
+            ;;
+        *)
+            echo "Unknown argument ${OPTION}" >&2
+            exit 1
+    esac
+}
+
+function process_command {
+    for option in $@ ; do
+        on_option "$option"
+    done
+}
+
+function log_verbose {
+    if [[ $VERBOSE == true ]] ; then
+        echo $@ >&2
+    fi
+}
+
+function create_tree_hash {
+    STDOUT_FD=$1
+    INDEX_TREE=$(git write-tree) &&
+    log_verbose "index tree hash ${INDEX_TREE}" &&
+    if [[ $INDEX == true ]] ; then
+        echo $INDEX_TREE
+        return
+    fi &&
+    git add -A &&
+    WORKING_DIRECTORY_TREE=$(git write-tree) &&
+    log_verbose "working directory tree hash ${WORKING_DIRECTORY_TREE}" &&
+    git read-tree --reset ${INDEX_TREE} &&
+    log_verbose "working directory content restored" &&
+    echo $WORKING_DIRECTORY_TREE
+}
+
+process_command $@
+COMMIT_MESSAGE=${MESSAGE:-snapshot}
+TREE=$(create_tree_hash 3) &&
+COMMIT=$(git commit-tree ${TREE} -m "${COMMIT_MESSAGE}") &&
+if [[ ${#TAG} > 0 ]] ; then
+    if [[ $FORCE_TAG == true ]] ; then
+        FORCE=-f
+    fi
+    git tag $FORCE "${TAG}" ${COMMIT} >&2 &&
+    log_verbose "tag \"${TAG}\" created"
+fi &&
+echo ${COMMIT}
