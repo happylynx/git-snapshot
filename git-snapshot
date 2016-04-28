@@ -1,8 +1,22 @@
 #!/bin/sh
 
 function print_help {
-    echo '''Usage: git snapshot [--verbose | -v] [-m | --message <message>]
-             [-i | --index] [-t | tag <tag_name>] [--force-tag]
+# add uploadpack.allowreachablesha1inwant=true
+    echo '''Usage: git snapshot [--verbose | -v] [-m | --message <message>] [-i | --index] [-t | --tag <tag_name>] [--force-tag] [-a | --auto-tag]
+
+    It creates a commit of current working directory and prints hash of created commit.
+    Working directory, index, HEAD and current branch are not touched.
+
+    -m, --message <message>
+                         custom commit message
+    -i, --index          take a snapshot of index only
+    -t, --tag <tag_name> tag the created commit using <tag_name>
+    --force-tag          relevant with --tag, it allows update existing tag
+    -a, --auto-tag       it creates a tag named "snapshot_<random_string>" and
+                         prints the tag instead of commit hash
+
+    Use git 2.5+ and set config uploadpack.allowreachablesha1inwant=true on source repository to be
+    able fetch single commit addressed by hash.
 '''
 }
 
