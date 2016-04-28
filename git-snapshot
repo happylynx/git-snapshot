@@ -63,6 +63,9 @@ function on_option {
         -i | --index )
             INDEX=true
             ;;
+        -a | --auto-tag )
+            AUTO_TAG=true
+            ;;
         *)
             echo "Unknown argument ${OPTION}" >&2
             exit 1
@@ -97,6 +100,39 @@ function create_tree_hash {
     echo $WORKING_DIRECTORY_TREE
 }
 
+# returns one hex number, e.g. '7a'
+function get_random_character_code {
+    # chars are in ranges (inclusive)
+    # '0' - '9' 48-57
+    # 'A' - 'Z' 65-90
+    # 'a' - 'z' 97-122
+    local NUMBER_OF_CHARACTERS=$((10 + 26 + 26))
+    local CHAR_INDEX=$((RANDOM % NUMBER_OF_CHARACTERS))
+    CHAR_INDEX=$((CHAR_INDEX + 48))
+    if [[ ${CHAR_INDEX} > 57 ]] ; then
+        CHAR_INDEX=$((CHAR_INDEX + 7))
+    fi
+    if [[ ${CHAR_INDEX} > 90 ]] ; then
+        CHAR_INDEX=$((CHAR_INDEX + 6))
+    fi
+    printf %x $CHAR_INDEX
+}
+
+function get_random_character {
+    echo -e "\\u$(get_random_character_code)"
+}
+
+function get_random_string {
+    local LENGTH=$1
+    local RESULT=""
+    local COUNTER=0
+    while [[ ${COUNTER} -lt ${LENGTH} ]] ; do
+        RESULT+=$(get_random_character)
+        COUNTER=$((COUNTER + 1))
+    done
+    echo "$RESULT"
+}
+
 process_command $@
 COMMIT_MESSAGE=${MESSAGE:-snapshot}
 TREE=$(create_tree_hash 3) &&
@@ -108,4 +144,10 @@ if [[ ${#TAG} > 0 ]] ; then
     git tag $FORCE "${TAG}" ${COMMIT} >&2 &&
     log_verbose "tag \"${TAG}\" created"
 fi &&
-echo ${COMMIT}
+if [[ ${AUTO_TAG} == true ]] ; then
+    TAG_NAME="snapshot_$(get_random_string 32)"
+    git tag "${TAG_NAME}" "${COMMIT}"
+    echo ${TAG_NAME}
+else
+    echo ${COMMIT}
+fi
